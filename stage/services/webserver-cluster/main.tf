@@ -14,12 +14,12 @@ resource "aws_launch_template" "example" {
   instance_type          = "t2.micro"
   vpc_security_group_ids = [aws_security_group.instance.id]
 
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              echo "Hello, World" > index.html
-              nohup busybox httpd -f -p ${var.server_port} &
-              EOF
-  )
+  # Render the User Data script as a template
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+    server_port = var.server_port
+    db_address  = data.terraform_remote_state.db.outputs.address
+    db_port     = data.terraform_remote_state.db.outputs.port
+  }))
 }
 
 resource "aws_autoscaling_group" "example" {
@@ -141,5 +141,15 @@ resource "aws_lb_listener_rule" "asg" {
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.asg.arn
+  }
+}
+
+data "terraform_remote_state" "db" {
+  backend = "s3"
+
+  config = {
+    bucket = "terraform-up-and-running-state-andremoreirafocus"
+    key    = "stage/data-stores/mysql/terraform.tfstate"
+    region = "us-east-2"
   }
 }
