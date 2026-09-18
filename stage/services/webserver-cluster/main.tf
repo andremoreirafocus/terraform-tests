@@ -1,12 +1,3 @@
-provider "aws" {
-  region = "us-east-2"
-}
-
-variable "server_port" {
-  description = "The port the server will use for HTTP requests"
-  type        = number
-}
-
 data "aws_vpc" "default" {
   default = true
 }
@@ -76,16 +67,6 @@ data "aws_instances" "example" {
   depends_on = [aws_autoscaling_group.example]
 }
 
-output "alb_dns_name" {
-  value       = aws_lb.example.dns_name
-  description = "DNS name of the ALB"
-}
-
-output "ec2_instance_private_ips" {
-  description = "Private IP addresses of the running ASG instances"
-  value       = data.aws_instances.example.private_ips
-}
-
 resource "aws_security_group" "alb" {
   name = "terraform-example-alb"
 
@@ -129,7 +110,6 @@ resource "aws_lb_listener" "http" {
     }
   }
 }
-
 
 resource "aws_lb_target_group" "asg" {
   name     = "terraform-asg-example"
