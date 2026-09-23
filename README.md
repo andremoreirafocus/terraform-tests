@@ -1,37 +1,64 @@
 # Terraform AWS Tests
 
-A learning project that deploys a "Hello, World" web server cluster on AWS in Ohio (`us-east-2`). An Application Load Balancer routes HTTP traffic to EC2 instances managed by an Auto Scaling group with a minimum of two and maximum of three instances.
+This project deploys a small MySQL-backed web application in AWS Ohio (us-east-2). An Application Load Balancer routes HTTP traffic to EC2 instances managed by an Auto Scaling group. The webserver resources are implemented in a reusable Terraform module.
 
 ```text
-global/s3/                         S3 infrastructure for remote Terraform state
-stage/services/webserver-cluster/  Launch template, Auto Scaling group, ALB, and security groups
+global/s3/                         S3 backend bucket and its configuration
+stage/data-stores/mysql/           MySQL RDS instance and database outputs
+modules/services/webserver-cluster Reusable webserver-cluster module
+stage/services/webserver-cluster/  Stage root that calls the webserver module
 ```
 
-Each directory is an independent Terraform configuration, split into resource, provider, backend, output, and (where needed) variable files. Both configurations use the same S3 bucket with separate state keys and S3 lockfiles. The bucket has versioning, encryption, public access blocking, and deletion protection through Terraform.
+Each root configuration has its own S3 state key:
 
-Install Terraform and configure AWS credentials before running the commands below from the project root. The S3 backend bucket must already exist before initialization; it was bootstrapped separately for this project.
+```text
+global/s3/terraform.tfstate
+stage/data-stores/mysql/terraform.tfstate
+stage/services/webserver-cluster/terraform.tfstate
+```
 
-Review the state infrastructure:
+The S3 backend uses versioning, AES256 encryption, public-access blocking, and S3 lockfiles. The backend bucket must exist before the other configurations can initialize.
+
+Install Terraform, configure AWS credentials, and run commands from the project root. The database must be applied before the webserver configuration because the webserver reads the database endpoint and port from the MySQL remote state.
+
+Initialize and verify the backend infrastructure:
 
 ```bash
 terraform -chdir=global/s3 init
 terraform -chdir=global/s3 plan
 ```
 
-Deploy the webserver cluster:
+Create the MySQL database. Store credentials in stage/data-stores/mysql/.env using DB_USERNAME and DB_PASSWORD; the file is ignored by Git.
 
 ```bash
+cd stage/data-stores/mysql
+source ./vars.sh
+terraform init
+terraform plan
+terraform apply
+```
+
+Deploy the stage webserver cluster:
+
+```bash
+cd ../../..
 terraform -chdir=stage/services/webserver-cluster init
 terraform -chdir=stage/services/webserver-cluster plan -var="server_port=80"
 terraform -chdir=stage/services/webserver-cluster apply -var="server_port=80"
 ```
 
-The cluster outputs the ALB DNS name and instance private IP addresses. Open `http://<alb_dns_name>` to access the application after its targets become healthy.
+The webserver root calls the module in modules/services/webserver-cluster, then exposes the ALB DNS name and private IP addresses as root outputs. Open http://<alb_dns_name> after the Auto Scaling targets become healthy.
 
-To remove the application while retaining the state bucket:
+To remove the web application while retaining the backend bucket and database state:
 
 ```bash
 terraform -chdir=stage/services/webserver-cluster destroy -var="server_port=80"
 ```
 
-Commit `.terraform.lock.hcl` files to preserve provider versions. Local state files and `.terraform` directories are excluded by `.gitignore`.
+If Terraform reports a state lock, verify that no other operation is running. Only if the lock is stale, release it with the lock ID shown in the error:
+
+```bash
+terraform force-unlock <lock-id>
+```
+
+Commit .terraform.lock.hcl files to preserve provider versions. Local state files, .terraform directories, and database credentials are excluded by .gitignore.
