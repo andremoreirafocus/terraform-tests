@@ -11,7 +11,7 @@ data "aws_subnets" "default" {
 
 resource "aws_launch_template" "example" {
   image_id               = "ami-0fb653ca2d3203ac1"
-  instance_type          = "t2.micro"
+  instance_type          =  var.instance_type
   vpc_security_group_ids = [aws_security_group.instance.id]
 
   # Render the User Data script as a template
@@ -35,9 +35,9 @@ resource "aws_autoscaling_group" "example" {
   target_group_arns = [aws_lb_target_group.asg.arn]
   health_check_type = "ELB"
 
-  min_size = 2
-  max_size = 3
-
+  min_size = var.min_size
+  max_size = var.max_size
+  
   wait_for_capacity_timeout = "20m"
 
   tag {

@@ -12,4 +12,8 @@ module "webserver_cluster" {
   server_port  = var.server_port
   db_address   = module.mysql.db_address
   db_port      = module.mysql.db_port
+
+  instance_type = "t3.micro"
+  min_size      = 2
+  max_size      = 2
 }
