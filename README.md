@@ -1,65 +1,76 @@
 # Terraform AWS Tests
 
-This project deploys a small MySQL-backed web application in AWS Ohio (us-east-2). An Application Load Balancer routes HTTP traffic to EC2 instances managed by an Auto Scaling group. The webserver resources are implemented in a reusable Terraform module.
+This project deploys a MySQL-backed web application in AWS Ohio (`us-east-2`). An Application Load Balancer routes HTTP traffic to EC2 instances in an Auto Scaling group. Terraform manages the database and web application together from one production root configuration and one remote state.
 
 ```text
-global/s3/                         S3 backend bucket and its configuration
-stage/data-stores/mysql/           Stage root for the MySQL module and database state
-modules/data-stores/mysql/          Reusable MySQL RDS module
-modules/services/webserver-cluster Reusable webserver-cluster module
-stage/services/webserver-cluster/  Stage root that calls the webserver module
+global/s3/                           Creates the S3 backend bucket
+modules/data-stores/mysql/           Reusable MySQL RDS module
+modules/services/webserver-cluster/  Reusable ALB and Auto Scaling module
+prod/                                Production root configuration
 ```
 
-Each root configuration has its own S3 state key:
+## Architecture and state
+
+The `prod` root calls both reusable modules. It passes `module.mysql.db_address` and `module.mysql.db_port` directly to the webserver module. Terraform therefore creates the database before creating the launch template that renders those values into `user-data.sh`; no `terraform_remote_state` data source is used.
+
+The production root stores its combined state in this S3 object:
 
 ```text
-global/s3/terraform.tfstate
-stage/data-stores/mysql/terraform.tfstate
-stage/services/webserver-cluster/terraform.tfstate
+terraform-up-and-running-state-andremoreirafocus/prod/systems/web-app/terraform.tfstate
 ```
 
-The S3 backend uses versioning, AES256 encryption, public-access blocking, and S3 lockfiles. The backend bucket must exist before the other configurations can initialize.
+The S3 backend uses server-side encryption and S3 lock files (`use_lockfile = true`). The backend bucket configuration also enables versioning and blocks public access.
 
-Install Terraform, configure AWS credentials, and run commands from the project root. The database module must be applied before the webserver configuration because the webserver reads the database endpoint and port from the MySQL remote state. The MySQL module currently preserves the existing database settings; additional environment parameters are documented in MYSQL_MODULE_MIGRATION.md.
+## Prerequisites
 
-Initialize and verify the backend infrastructure:
+- Terraform installed
+- AWS credentials with access to the backend bucket and permission to create the configured AWS resources
+- The backend bucket already created by `global/s3`
 
-```bash
-terraform -chdir=global/s3 init
-terraform -chdir=global/s3 plan
+Create `prod/.env` locally; it is ignored by Git:
+
+```dotenv
+DB_USERNAME=your_database_username
+DB_PASSWORD=your_database_password
 ```
 
-Create the MySQL database. Store credentials in stage/data-stores/mysql/.env using DB_USERNAME and DB_PASSWORD; the file is ignored by Git.
+`prod/vars.sh` exports these values as Terraform input variables without printing them.
+
+## Deploy production
+
+Run from the repository root:
 
 ```bash
-cd stage/data-stores/mysql
+cd prod
 source ./vars.sh
+terraform fmt -check
 terraform init
-terraform plan
-terraform apply
+terraform plan -var="server_port=80"
+terraform apply -var="server_port=80"
 ```
 
-Deploy the stage webserver cluster:
+Always review the plan before applying. After a successful apply, retrieve the load balancer address with:
 
 ```bash
-cd ../../..
-terraform -chdir=stage/services/webserver-cluster init
-terraform -chdir=stage/services/webserver-cluster plan -var="server_port=80"
-terraform -chdir=stage/services/webserver-cluster apply -var="server_port=80"
+terraform output -raw alb_dns_name
 ```
 
-The stage root calls modules/data-stores/mysql for the database and modules/services/webserver-cluster for the application, then exposes the ALB DNS name and private IP addresses as root outputs. Open http://<alb_dns_name> after the Auto Scaling targets become healthy.
+## Existing infrastructure and state migration
 
-To remove the web application while retaining the backend bucket and database state:
+The `prod` root is safe to apply as a new deployment. If MySQL or webserver resources were previously created from separate state files, do **not** apply the combined root until their state has been migrated or imported into the combined production state. Otherwise Terraform will not know those resources already exist and can propose duplicates.
 
-```bash
-terraform -chdir=stage/services/webserver-cluster destroy -var="server_port=80"
-```
+When intentionally changing a backend target, use `terraform init -migrate-state` to migrate state. Use `terraform init -reconfigure` only when refreshing Terraform's locally cached backend settings without moving state.
 
-If Terraform reports a state lock, verify that no other operation is running. Only if the lock is stale, release it with the lock ID shown in the error:
+## State locks
+
+Terraform creates an S3 lock object while planning or applying. If a command exits unexpectedly, a stale lock can remain. First confirm that no other Terraform plan, apply, CI job, or terminal is operating on the same state. Then release only the lock ID shown in Terraform's error:
 
 ```bash
 terraform force-unlock <lock-id>
 ```
 
-Commit .terraform.lock.hcl files to preserve provider versions. Local state files, .terraform directories, and database credentials are excluded by .gitignore.
+Do not use `-lock=false` for normal operations, and do not force-unlock a lock held by an active operation.
+
+## Repository hygiene
+
+Commit `.terraform.lock.hcl` files so all users select the same provider versions. Do not commit `.env`, `.terraform/`, or `*.tfstate` files.
