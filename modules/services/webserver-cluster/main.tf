@@ -9,6 +9,14 @@ data "aws_subnets" "default" {
   }
 }
 
+locals {
+  http_port    = 80
+  any_port     = 0
+  any_protocol = "-1"
+  tcp_protocol = "tcp"
+  all_ips      = ["0.0.0.0/0"]
+}
+
 resource "aws_launch_template" "example" {
   image_id               = "ami-0fb653ca2d3203ac1"
   instance_type          =  var.instance_type
@@ -17,8 +25,6 @@ resource "aws_launch_template" "example" {
   # Render the User Data script as a template
   user_data = base64encode(templatefile("${path.module}/user-data.sh", {
     server_port = var.server_port
-    # db_address  = data.terraform_remote_state.db.outputs.address
-    # db_port     = data.terraform_remote_state.db.outputs.port
     db_address  = var.db_address
     db_port     = var.db_port
   }))
@@ -53,8 +59,8 @@ resource "aws_security_group" "instance" {
   ingress {
     from_port   = var.server_port
     to_port     = var.server_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol    = local.tcp_protocol
+    cidr_blocks = local.all_ips
   }
 }
 
@@ -74,18 +80,18 @@ resource "aws_security_group" "alb" {
 
   # Allow inbound HTTP requests
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port   = local.http_port
+    to_port     = local.http_port
+    protocol    = local.tcp_protocol
+    cidr_blocks = local.all_ips
   }
 
   # Allow all outbound requests
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol    = local.any_protocol
+    cidr_blocks = local.all_ips
   }
 }
 
@@ -145,13 +151,3 @@ resource "aws_lb_listener_rule" "asg" {
     target_group_arn = aws_lb_target_group.asg.arn
   }
 }
-
-# data "terraform_remote_state" "db" {
-#   backend = "s3"
-
-#   config = {
-#     bucket = var.db_remote_state_bucket
-#     key    = var.db_remote_state_key
-#     region = "us-east-2"
-#   }
-# }
