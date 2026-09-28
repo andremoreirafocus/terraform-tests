@@ -8,12 +8,22 @@ variable "cluster_name" {
   type        = string
 }
 
-variable "db_remote_state_bucket" {
-  description = "The name of the S3 bucket for the database's remote state"
+variable "db_address" {
+  description = "The address of the database"
   type        = string
 }
 
-variable "db_remote_state_key" {
-  description = "The path for the database's remote state in S3"
-  type        = string
+variable "db_port" {
+  description = "The port of the database"
+  type        = number
 }
+
+# variable "db_remote_state_bucket" {
+#   description = "The name of the S3 bucket for the database's remote state"
+#   type        = string
+# }
+
+# variable "db_remote_state_key" {
+#   description = "The path for the database's remote state in S3"
+#   type        = string
+# }
