@@ -21,8 +21,12 @@ module "webserver_cluster" {
 }
 
 module "users" {
-  source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.3"
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.4"
+  user_names = var.user_names
 
-  count     = length(var.user_names)
-  user_name = var.user_names[count.index]
+  # source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.2"
+
+  # count     = length(var.user_names)
+  # user_name = var.user_names[count.index]
 }
+

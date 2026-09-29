@@ -14,7 +14,11 @@ output "db_port" {
   value = module.mysql.db_port
 }
 
-output "user_arns" {
-  value       = module.users[*].user_arn
-  description = "The ARNs of the created IAM users"
+output "all_users" {
+  value = module.users[*]
 }
+
+# output "user_arns" {
+#   value       = module.users[*].user_arn
+#   description = "The ARNs of the created IAM users"
+# }
