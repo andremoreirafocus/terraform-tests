@@ -1,14 +1,15 @@
 module "mysql" {
-  source = "../modules/data-stores/mysql"
-
+  # source = "../modules/data-stores/mysql"
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/data-stores/mysql?ref=v0.0.1"
   db_username = var.db_username
   db_password = var.db_password
 }
 
 module "webserver_cluster" {
-  source = "../modules/services/webserver-cluster"
+  # source = "../modules/services/webserver-cluster"
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.1"
 
-  cluster_name = "webservers-prod"
+  cluster_name = "webservers-stage"
   server_port  = var.server_port
   db_address   = module.mysql.db_address
   db_port      = module.mysql.db_port
