@@ -14,3 +14,9 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "user_names" {
+  description = "Create IAM users with these names"
+  type        = list(string)
+  default     = ["neo", "trinity", "morpheus"]
+}

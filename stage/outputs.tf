@@ -13,3 +13,8 @@ output "db_address" {
 output "db_port" {
   value = module.mysql.db_port
 }
+
+output "user_arns" {
+  value       = module.users[*].user_arn
+  description = "The ARNs of the created IAM users"
+}

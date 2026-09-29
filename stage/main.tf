@@ -1,3 +1,4 @@
+
 module "mysql" {
   # source = "../modules/data-stores/mysql"
   source = "github.com/andremoreirafocus/terraform-modules.git//modules/data-stores/mysql?ref=v0.0.1"
@@ -17,4 +18,11 @@ module "webserver_cluster" {
   instance_type = "t2.micro"
   min_size      = 2
   max_size      = 2
+}
+
+module "users" {
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.3"
+
+  count     = length(var.user_names)
+  user_name = var.user_names[count.index]
 }
