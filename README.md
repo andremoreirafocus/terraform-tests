@@ -63,13 +63,15 @@ When intentionally changing a backend target, use `terraform init -migrate-state
 
 ## State locks
 
-Terraform creates an S3 lock object while planning or applying. If a command exits unexpectedly, a stale lock can remain. First confirm that no other Terraform plan, apply, CI job, or terminal is operating on the same state. Then release only the lock ID shown in Terraform's error:
+Terraform creates an S3 lock object while planning or applying. If a command exits unexpectedly, a stale lock can remain. An `Error acquiring the state lock` response with S3 status `412 PreconditionFailed` and a `Lock Info` block means that Terraform found an existing lock object. The `Operation`, `Who`, and `Created` fields identify the operation that owns it.
+
+You do not need the AWS CLI to confirm this: Terraform's error already reports the lock and its ID. First confirm that no other Terraform plan, apply, CI job, or terminal is operating on the same state. If the recorded operation has stopped, release only the lock ID shown in the error:
 
 ```bash
 terraform force-unlock <lock-id>
 ```
 
-Do not use `-lock=false` for normal operations, and do not force-unlock a lock held by an active operation.
+Terraform prompts for confirmation. After it succeeds, retry `terraform plan`. Do not use `-lock=false` for normal operations, manually delete the S3 lock object, or force-unlock a lock held by an active operation.
 
 ## Repository hygiene
 
