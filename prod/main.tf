@@ -7,7 +7,7 @@ module "mysql" {
 
 module "webserver_cluster" {
   # source = "../modules/services/webserver-cluster"
-  source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.1"
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.5"
 
   cluster_name = "webservers-prod"
   server_port  = var.server_port
@@ -17,6 +17,11 @@ module "webserver_cluster" {
   instance_type = "t3.micro"
   min_size      = 2
   max_size      = 2
+
+  custom_tags = {
+    Owner     = "team-focus"
+    ManagedBy = "andrem"
+  }  
 }
 
 resource "aws_autoscaling_schedule" "scale_out_during_business_hours" {
