@@ -1,23 +1,23 @@
 
-module "mysql" {
-  source = "github.com/andremoreirafocus/terraform-modules.git//modules/data-stores/mysql?ref=v0.0.1"
-  db_username = var.db_username
-  db_password = var.db_password
-}
+# module "mysql" {
+#   source = "github.com/andremoreirafocus/terraform-modules.git//modules/data-stores/mysql?ref=v0.0.1"
+#   db_username = var.db_username
+#   db_password = var.db_password
+# }
 
-module "webserver_cluster" {
-  source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.6"
+# module "webserver_cluster" {
+#   source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.6"
 
-  cluster_name = "webservers-stage"
-  server_port  = var.server_port
-  db_address   = module.mysql.db_address
-  db_port      = module.mysql.db_port
+#   cluster_name = "webservers-stage"
+#   server_port  = var.server_port
+#   db_address   = module.mysql.db_address
+#   db_port      = module.mysql.db_port
 
-  instance_type = "t2.micro"
-  min_size      = 2
-  max_size      = 2
-  enable_autoscaling = false
-}
+#   instance_type = "t2.micro"
+#   min_size      = 2
+#   max_size      = 2
+#   enable_autoscaling = false
+# }
 
 module "users" {
   source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.6"
@@ -60,4 +60,18 @@ data "aws_iam_policy_document" "cloudwatch_full_access" {
     actions   = ["cloudwatch:*"]
     resources = ["*"]
   }
+}
+
+resource "aws_iam_user_policy_attachment" "neo_cloudwatch_full_access" {
+  count = var.give_neo_cloudwatch_full_access ? 1 : 0
+
+  user       = module.users.all_users["neo_st"].name
+  policy_arn = aws_iam_policy.cloudwatch_full_access.arn
+}
+
+resource "aws_iam_user_policy_attachment" "neo_cloudwatch_read_only" {
+  count = var.give_neo_cloudwatch_full_access ? 0 : 1
+
+  user       = module.users.all_users["neo_st"].name
+  policy_arn = aws_iam_policy.cloudwatch_read_only.arn
 }
