@@ -1,85 +1,82 @@
 # Terraform AWS Tests
 
-This repository contains the production and stage root configurations for a MySQL-backed web application in AWS Ohio (`us-east-2`). An Application Load Balancer routes HTTP traffic to EC2 instances in an Auto Scaling group.
+This repository contains Terraform exercises and AWS root configurations for the `us-east-2` (Ohio) region. The deployable environments create a MySQL-backed web application: an Application Load Balancer routes HTTP traffic to EC2 instances in an Auto Scaling group.
 
-The reusable MySQL and webserver-cluster modules are maintained in a separate, versioned modules repository. They are intentionally not included in this repository.
+The reusable infrastructure modules are maintained in the separate [`terraform-modules`](https://github.com/andremoreirafocus/terraform-modules) repository. The local `legacy/` directory is retained only as historical reference.
 
 ```text
-global/s3/  Creates the S3 backend bucket
-prod/       Production root configuration
-stage/      Stage root configuration
-legacy/     Historical local module and root configurations; do not use for deployment
+dev/        Local Terraform expression/output experiments; no remote backend
+global/s3/  Creates and configures the S3 remote-state bucket
+prod/       Production web application root configuration
+stage/      Stage web application root configuration, IAM users, and IAM policies
+legacy/     Historical local modules and split roots; do not use for deployment
 ```
 
 ## External modules
 
-The current `prod/main.tf` and `stage/main.tf` still refer to the removed local paths (`../modules/...`). They are not runnable until both module `source` attributes are changed to the external modules repository. Do not run `terraform init`, `plan`, or `apply` in either environment until that change is complete.
+The active roots reference the external MySQL and webserver-cluster modules; stage also references the IAM-user module. The module blocks in [prod/main.tf](prod/main.tf) and [stage/main.tf](stage/main.tf) are the source of truth for their exact source addresses and pinned releases.
 
-Pin each module to an immutable release tag or commit. For a Git-hosted repository, the module calls should follow this pattern (replace every placeholder with the actual repository, subdirectory, and release):
+Keep module references pinned. Release tags should be protected against mutation; use a commit SHA when that guarantee is unavailable.
 
-```hcl
-module "mysql" {
-  source = "git::https://github.com/<organization>/<terraform-modules-repository>.git//<mysql-module-path>?ref=v<version>"
+### Module interface used here
 
-  # ...
-}
-
-module "webserver_cluster" {
-  source = "git::https://github.com/<organization>/<terraform-modules-repository>.git//<webserver-cluster-module-path>?ref=v<version>"
-
-  # ...
-}
-```
-
-Do not pin to a mutable branch such as `main`. If the modules are published through a Terraform module registry instead, use that registry source address and its `version` argument.
-
-### Required module interface
-
-Before selecting a release, confirm it is compatible with these root configurations:
-
-| Module | Required inputs | Required outputs |
+| Module | Required inputs | Outputs used by this repository |
 | --- | --- | --- |
 | MySQL | `db_username`, `db_password` | `db_address`, `db_port` |
-| Webserver cluster | `cluster_name`, `server_port`, `db_address`, `db_port`, `instance_type`, `min_size`, `max_size` | `alb_dns_name`, `ec2_instance_private_ips`, `asg_name` |
+| Webserver cluster | `cluster_name`, `server_port`, `db_address`, `db_port`, `instance_type`, `min_size`, `max_size`, `enable_autoscaling` | `alb_dns_name`, `ec2_instance_private_ips`, `asg_name` |
+| IAM users (stage only) | `user_names` | `all_users` |
 
-`prod` uses `asg_name` for its Auto Scaling schedules. Both roots pass MySQL outputs directly into the webserver module, so Terraform creates the database before it creates the launch template. No `terraform_remote_state` data source is used.
+`custom_tags` is optional for the webserver module and is configured in `prod`. Both application roots pass the MySQL outputs directly into the webserver module, so Terraform creates the database before the launch template. They do not use `terraform_remote_state`.
 
-Changing only a module source does not require a state migration if the module names and all resource addresses within the selected external module remain the same. Review the first plan carefully; resource replacements or deletes indicate an incompatible module release or changed resource addresses.
+Production enables the webserver module's scheduled Auto Scaling behavior; stage disables it. Both roots expose the Auto Scaling group name as an output. Stage also creates IAM users from `user_names` and creates unattached CloudWatch read-only and full-access IAM policies.
 
 ## Remote state
 
-Each environment has one combined S3 state object:
+`prod` and `stage` each use one combined S3 state object:
 
 ```text
 terraform-up-and-running-state-andremoreirafocus/prod/systems/web-app/terraform.tfstate
 terraform-up-and-running-state-andremoreirafocus/stage/systems/web-app/terraform.tfstate
 ```
 
-The S3 backend uses server-side encryption and S3 lock files (`use_lockfile = true`). The backend bucket configuration in `global/s3` enables versioning and blocks public access.
+`global/s3` stores its own state at `global/s3/terraform.tfstate`. The backend bucket has versioning, default SSE-S3 encryption, public-access blocking, and S3 lock files (`use_lockfile = true`). `dev` has no backend configuration, so its local state remains ignored by Git.
 
 If MySQL or webserver resources were previously created from separate state files, do **not** apply a combined root until their state has been migrated or imported into the appropriate combined state. Otherwise Terraform can propose duplicate resources.
 
-When intentionally changing a backend target, use `terraform init -migrate-state` to migrate state. Use `terraform init -reconfigure` only when refreshing Terraform's locally cached backend settings without moving state.
+When intentionally changing a backend target, use `terraform init -migrate-state` to migrate state. Use `terraform init -reconfigure` only to refresh Terraform's locally cached backend settings without moving state.
+
+### Bootstrap the backend bucket
+
+The `global/s3` configuration refers to the bucket it creates, so the first bootstrap must start with the backend disabled:
+
+```bash
+cd global/s3
+terraform init -backend=false
+terraform apply
+terraform init -migrate-state
+```
+
+If the bucket and its state already exist, initialize `global/s3` normally with `terraform init`.
 
 ## Prerequisites
 
 - Terraform installed
 - AWS credentials with access to the backend bucket and permission to create the configured AWS resources
-- The backend bucket already created by `global/s3`
-- External module sources set to compatible, pinned releases
+- Network access to the external module repository
+- The backend bucket bootstrapped through `global/s3`
 
-Create `<environment>/.env` locally; it is ignored by Git:
+Create `prod/.env` and `stage/.env` locally; they are ignored by Git:
 
 ```dotenv
 DB_USERNAME=your_database_username
 DB_PASSWORD=your_database_password
 ```
 
-`prod/vars.sh` and `stage/vars.sh` export these values as Terraform input variables without printing them.
+`prod/vars.sh` and `stage/vars.sh` export these values as sensitive Terraform input variables without printing them.
 
 ## Deploy an environment
 
-After updating the module sources, replace `<environment>` with `prod` or `stage`:
+Replace `<environment>` with `prod` or `stage`:
 
 ```bash
 cd <environment>
@@ -96,11 +93,13 @@ Always review the plan before applying. After a successful apply, retrieve the l
 terraform output -raw alb_dns_name
 ```
 
+The stage user names default to values declared in [stage/variables.tf](stage/variables.tf); override them with `-var='user_names=["name1","name2"]'` when needed.
+
 ## State locks
 
 Terraform creates an S3 lock object while planning or applying. An `Error acquiring the state lock` response with S3 status `412 PreconditionFailed` and a `Lock Info` block means Terraform found an existing lock object. The `Operation`, `Who`, and `Created` fields identify the operation that owns it.
 
-You do not need the AWS CLI to confirm this: Terraform's error already reports the lock and its ID. First confirm that no other Terraform plan, apply, CI job, or terminal is operating on the same state. If the recorded operation has stopped, release only the lock ID shown in the error:
+First confirm that no other Terraform plan, apply, CI job, or terminal is operating on the same state. If the recorded operation has stopped, release only the lock ID shown in the error:
 
 ```bash
 terraform force-unlock <lock-id>
@@ -110,4 +109,4 @@ Terraform prompts for confirmation. After it succeeds, retry `terraform plan`. D
 
 ## Repository hygiene
 
-Commit `.terraform.lock.hcl` files so all users select the same provider versions. Do not commit `.env`, `.terraform/`, or `*.tfstate` files.
+Commit `.terraform.lock.hcl` files so all users select the same provider versions. Do not commit `.env`, `.terraform/`, or local `*.tfstate` files. Run `terraform fmt -recursive` before committing Terraform changes.
