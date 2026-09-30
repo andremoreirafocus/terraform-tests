@@ -18,7 +18,7 @@ output "all_users" {
   value = module.users[*]
 }
 
-# output "user_arns" {
-#   value       = module.users[*].user_arn
-#   description = "The ARNs of the created IAM users"
-# }
+output "user_arns" {
+  value       = module.users[*].user_arn
+  description = "The ARNs of the created IAM users"
+}

@@ -28,5 +28,8 @@ module "users" {
 
   # count     = length(var.user_names)
   # user_name = var.user_names[count.index]
+  # or
+  # for_each  = toset(var.user_names)
+  # user_name = each.value
 }
 
