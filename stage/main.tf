@@ -8,7 +8,7 @@ module "mysql" {
 
 module "webserver_cluster" {
   # source = "../modules/services/webserver-cluster"
-  source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.1"
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/services/webserver-cluster?ref=v0.0.6"
 
   cluster_name = "webservers-stage"
   server_port  = var.server_port
@@ -18,10 +18,11 @@ module "webserver_cluster" {
   instance_type = "t2.micro"
   min_size      = 2
   max_size      = 2
+  enable_autoscaling = false
 }
 
 module "users" {
-  source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.4"
+  source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.6"
   user_names = var.user_names
 
   # source = "github.com/andremoreirafocus/terraform-modules.git//modules/landing-zone/iam-user?ref=v0.0.2"

@@ -18,7 +18,6 @@ output "all_users" {
   value = module.users[*]
 }
 
-output "user_arns" {
-  value       = module.users[*].user_arn
-  description = "The ARNs of the created IAM users"
+output "asg_name" {
+  value = module.webserver_cluster.asg_name
 }

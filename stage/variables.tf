@@ -18,5 +18,5 @@ variable "db_password" {
 variable "user_names" {
   description = "Create IAM users with these names"
   type        = list(string)
-  default     = ["neo", "trinity", "morpheus"]
+  default     = ["neo_st", "trinity_st", "morpheus_st"]
 }

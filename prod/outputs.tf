@@ -13,3 +13,7 @@ output "db_address" {
 output "db_port" {
   value = module.mysql.db_port
 }
+
+output "asg_name" {
+  value = module.webserver_cluster.asg_name
+}
